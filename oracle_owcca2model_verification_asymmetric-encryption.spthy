@@ -1,0 +1,59 @@
+theory OWCCA2_asymmetrickey_oracle_use_notoutkey
+begin
+
+heuristic: o "myoracle"
+
+builtins: asymmetric-encryption
+
+rule Init:
+[Fr(~key)] --[OnlyOnce(), Setup(~key)]-> [!Skey($A, ~key), !Pk($A, pk(~key))]
+
+rule Get_pk:
+[!Pk(S, publickey)] -->[Out(publickey)]
+
+rule Attacker_make_ciphertxt:
+ [ Fr(m_), Fr(~key)] --[Attacker($A)]-> [ Out(aenc(<$A, m_>, pk(~key))), St_Attacker(aenc(<$A, m_>, pk(~key)))]
+
+rule Dec_Oracle:
+[Fr(~key), In(aenc(<$A, m_>,pk(~key))),St_Attacker(aenc(<$A, m_>,pk(~key)))] 
+--[Send($A, aenc(<$A, m_>, pk(~key))), Secret(m_), Oracle($A), Sender($B), Role('Oracle'), Oracle_receive_ciphertext(aenc(<$A, m_>, pk(~key)))]-> 
+[Out(adec(aenc(<$A, m_>, pk(~key)), ~key)), St_ReceiveKeyOracle_ciphertext(aenc(<$A, m_>, pk(~key)))]
+
+rule Sender_encrypt:
+[ Fr(~m), Fr(~key)]  --[Send($B, aenc(<$B, ~m>, pk(~key))), Secret(~m), Sender($B), Oracle($A), Role('Sender'), Sender_send_ciphertext(aenc(<$B, ~m>, pk(~key))) ]-> [Out(aenc(<$B, ~m>, pk(~key))), St_ReceiveKey(aenc(<$B, ~m>, pk(~key)))]
+
+rule Attacker:
+let
+m1 = adec(aenc(<$A, m_>, pk(~key)), ~key)
+m2 = adec(aenc(<$B, ~m>, pk(~key)), ~key)
+in
+ [St_ReceiveKeyOracle_ciphertext(aenc(<$A, m_>, pk(~key))), In(adec(aenc(<$A, m_>, pk(~key)), ~key)), St_ReceiveKey(aenc(<$B, ~m>, pk(~key))),  In(aenc(<$B, ~m>, pk(~key))), Fr(~key)] --[ Notequalvalue(<m1, m2>), Secretmessage(m2)]-> [  ]
+
+rule dec_message:
+let 
+message = adec(c, ~key)
+in
+//[In(c), In(~key)] --[Secretreceiver(message)]-> []
+[In(c), Fr(~key)] --[Secretreceiver(message)]-> []
+
+restriction OnlyOnce:
+"All #i #j. OnlyOnce() @ i & OnlyOnce() @ j==> #i = #j"
+
+restriction choice_ciphertext:
+ "All x #i. Oracle_receive_ciphertext(x)@i
+  ==> (Ex y #j. Oracle_receive_ciphertext(y)@j & #j < #i) | (Ex y #j. Sender_send_ciphertext(y)@j & #j < #i)"
+
+lemma value_notequal:
+ "All #i #j x. Notequalvalue(x)@i & Notequalvalue(x)@j ==> #i=#j"
+
+lemma secret_sender_message:
+  all-traces
+    "All n #i. Secret(n) @i & Role('Sender') @i ==> (not (Ex #j. K(n)@j)) | (Ex B #j. Attacker(B)@j & Sender(B)@i)"
+
+lemma message_secret_receiver:
+"All m #i #j. Secretreceiver(m)@i & K(m)@j ==>F"
+
+lemma m_secret:
+"All m #i. Secretmessage(m)@i ==> not (Ex #j. K(m)@j)"
+
+end
