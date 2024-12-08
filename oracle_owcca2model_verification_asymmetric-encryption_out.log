@@ -1,0 +1,238 @@
+maude tool: 'maude'
+ checking version: 2.7.1. OK.
+ checking installation: OK.
+theory OWCCA2_asymmetrickey_oracle_use_outkey begin
+
+// Function signature and definition of the equational theory E
+
+functions: adec/2, aenc/2, fst/1, pair/2, pk/1, snd/1
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+
+
+
+
+
+
+rule (modulo E) Init:
+   [ Fr( ~key ) ]
+  --[ OnlyOnce( ), Setup( ~key ) ]->
+   [ !Skey( $A, ~key ), !Pk( $A, pk(~key) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Get_pk:
+   [ !Pk( S, publickey ) ] --> [ Out( publickey ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Attacker_make_ciphertxt:
+   [ Fr( m_ ), Fr( ~key ) ]
+  --[ Attacker( $A ) ]->
+   [
+   Out( aenc(<$A, m_>, pk(~key)) ), St_Attacker( aenc(<$A, m_>, pk(~key)) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Dec_Oracle:
+   [
+   Fr( ~key ), In( aenc(<$A, m_>, pk(~key)) ),
+   St_Attacker( aenc(<$A, m_>, pk(~key)) )
+   ]
+  --[
+  Send( $A, aenc(<$A, m_>, pk(~key)) ), Secret( m_ ), Oracle( $A ),
+  Sender( $B ), Role( 'Oracle' ),
+  Oracle_receive_ciphertext( aenc(<$A, m_>, pk(~key)) )
+  ]->
+   [
+   Out( adec(aenc(<$A, m_>, pk(~key)), ~key) ),
+   St_ReceiveKeyOracle_ciphertext( aenc(<$A, m_>, pk(~key)) )
+   ]
+
+  /*
+  rule (modulo AC) Dec_Oracle:
+     [
+     Fr( ~key ), In( aenc(<$A, m_>, pk(~key)) ),
+     St_Attacker( aenc(<$A, m_>, pk(~key)) )
+     ]
+    --[
+    Send( $A, aenc(<$A, m_>, pk(~key)) ), Secret( m_ ), Oracle( $A ),
+    Sender( $B ), Role( 'Oracle' ),
+    Oracle_receive_ciphertext( aenc(<$A, m_>, pk(~key)) )
+    ]->
+     [
+     Out( <$A, m_> ),
+     St_ReceiveKeyOracle_ciphertext( aenc(<$A, m_>, pk(~key)) )
+     ]
+  */
+
+rule (modulo E) Sender_encrypt:
+   [ Fr( ~m ), Fr( ~key ) ]
+  --[
+  Send( $B, aenc(<$B, ~m>, pk(~key)) ), Secret( ~m ), Sender( $B ),
+  Oracle( $A ), Role( 'Sender' ),
+  Sender_send_ciphertext( aenc(<$B, ~m>, pk(~key)) )
+  ]->
+   [
+   Out( aenc(<$B, ~m>, pk(~key)) ),
+   St_ReceiveKey( aenc(<$B, ~m>, pk(~key)) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Attacker:
+   [
+   St_ReceiveKeyOracle_ciphertext( aenc(<$A, m_>, pk(~key)) ),
+   In( adec(aenc(<$A, m_>, pk(~key)), ~key) ),
+   St_ReceiveKey( aenc(<$B, ~m>, pk(~key)) ),
+   In( aenc(<$B, ~m>, pk(~key)) ), Fr( ~key )
+   ]
+  --[
+  Notequalvalue( <adec(aenc(<$A, m_>, pk(~key)), ~key), 
+                  adec(aenc(<$B, ~m>, pk(~key)), ~key)>
+  ),
+  Secretmessage( adec(aenc(<$B, ~m>, pk(~key)), ~key) )
+  ]->
+   [ ]
+
+  /*
+  rule (modulo AC) Attacker:
+     [
+     St_ReceiveKeyOracle_ciphertext( aenc(<$A, m_>, pk(~key)) ),
+     In( <$A, m_> ), St_ReceiveKey( aenc(<$B, ~m>, pk(~key)) ),
+     In( aenc(<$B, ~m>, pk(~key)) ), Fr( ~key )
+     ]
+    --[ Notequalvalue( <<$A, m_>, $B, ~m> ), Secretmessage( <$B, ~m> ) ]->
+     [ ]
+  */
+
+rule (modulo E) dec_message:
+   [ In( c ), In( ~key ) ] --[ Secretreceiver( adec(c, ~key) ) ]-> [ ]
+
+  /*
+  rule (modulo AC) dec_message:
+     [ In( c ), In( ~key ) ] --[ Secretreceiver( z ) ]-> [ ]
+    variants (modulo AC)
+    1. ~key  = ~key.4
+       c     = c.4
+       z     = adec(c.4, ~key.4)
+    
+    2. ~key  = ~x.4
+       c     = aenc(x.5, pk(~x.4))
+       z     = x.5
+  */
+
+restriction OnlyOnce:
+  "∀ #i #j. ((OnlyOnce( ) @ #i) ∧ (OnlyOnce( ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction choice_ciphertext:
+  "∀ x #i.
+    (Oracle_receive_ciphertext( x ) @ #i) ⇒
+    ((∃ y #j. (Oracle_receive_ciphertext( y ) @ #j) ∧ (#j < #i)) ∨
+     (∃ y #j. (Sender_send_ciphertext( y ) @ #j) ∧ (#j < #i)))"
+
+lemma value_notequal:
+  all-traces
+  "∀ #i #j x.
+    ((Notequalvalue( x ) @ #i) ∧ (Notequalvalue( x ) @ #j)) ⇒ (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #i #j x.
+  (Notequalvalue( x ) @ #i) ∧ (Notequalvalue( x ) @ #j) ∧ ¬(#i = #j)"
+*/
+simplify
+by contradiction /* cyclic */
+
+lemma secret_sender_message:
+  all-traces
+  "∀ n #i.
+    ((Secret( n ) @ #i) ∧ (Role( 'Sender' ) @ #i)) ⇒
+    ((¬(∃ #j. K( n ) @ #j)) ∨
+     (∃ B #j. (Attacker( B ) @ #j) ∧ (Sender( B ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ n #i.
+  (Secret( n ) @ #i) ∧ (Role( 'Sender' ) @ #i)
+ ∧
+  (∃ #j. (K( n ) @ #j)) ∧
+  (∀ B #j. (Attacker( B ) @ #j) ∧ (Sender( B ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Secret( n ) @ #i )
+  case Dec_Oracle
+  by contradiction /* cyclic */
+next
+  case Sender_encrypt
+  solve( Role( 'Sender' ) @ #i )
+    case Sender_encrypt
+    solve( !KU( ~m ) @ #vk )
+      case Sender_encrypt
+      by solve( !KU( ~key ) @ #vk.1 )
+    qed
+  qed
+qed
+
+lemma message_secret_receiver:
+  all-traces
+  "∀ m #i #j. ((Secretreceiver( m ) @ #i) ∧ (K( m ) @ #j)) ⇒ (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ m #i #j. (Secretreceiver( m ) @ #i) ∧ (K( m ) @ #j)"
+*/
+simplify
+solve( !KU( ~key ) @ #vk.1 )
+  case fresh
+  solve( splitEqs(0) )
+    case split_case_1
+    solve( !KU( adec(c, ~key) ) @ #vk.2 )
+      case c_adec
+      SOLVED // trace found
+    qed
+  qed
+qed
+
+lemma m_secret:
+  all-traces "∀ m #i. (Secretmessage( m ) @ #i) ⇒ (¬(∃ #j. K( m ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ m #i. (Secretmessage( m ) @ #i) ∧ ∃ #j. (K( m ) @ #j)"
+*/
+simplify
+by contradiction /* cyclic */
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.8.0
+Maude version 2.7.1
+*/
+
+end
+
+==============================================================================
+summary of summaries:
+
+  value_notequal (all-traces): verified (2 steps)
+  secret_sender_message (all-traces): verified (6 steps)
+  message_secret_receiver (all-traces): falsified - found trace (5 steps)
+  m_secret (all-traces): verified (2 steps)
+
+==============================================================================
