@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+
+from __future__ import print_function
+import sys
+
+lines = sys.stdin.readlines()
+
+la = []
+lb = []
+lc = []
+ld = []
+le = []
+lemma = sys.argv[1]
+
+for line in lines:
+  num = line.split(':')[0]
+
+  if lemma == "value_notequal":
+      if ": St_ReceiveKey" in line:
+        la.append(num)
+      elif "aenc(<$B, ~m>, pk(~key)" or "aenc(<$B, ~m>, pk(key)" in line:
+        lb.append(num)
+      elif "aenc(<$A, ~m>, pk(~key)" or "aenc(<$A, ~m>, pk(key)" in line:
+        lc.append(num)
+      elif "KU(~key" in line or "KU(key" in line:
+        ld.append(num)
+      else:
+        le.append(num)
+
+  else:
+    exit(0)
+
+ranked = la + lb + lc + ld + le
+
+for i in ranked:
+  print(i)
