@@ -18,9 +18,9 @@ for line in lines:
   if lemma == "value_notequal":
       if ": St_ReceiveKey" in line:
         la.append(num)
-      elif "Out(aenc(<$B, ~m>, pk(~key)" in line:
+      elif "In(aenc(<$B, ~m>, pk(~key)" in line:
         lb.append(num)
-      elif "In(aenc(<$A, ~m>, pk(~key)" in line:
+      elif "Out(aenc(<$A, ~m>, pk(~key)" in line:
         lc.append(num)
       elif "KU(~key" in line or "KU(key" in line:
         ld.append(num)
