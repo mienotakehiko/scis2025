@@ -3,7 +3,8 @@ begin
 
 heuristic: o "myoracle"
 
-builtins: asymmetric-encryption
+builtins: asymmetric-encryption, multiset
+predicates: Equal(x,y) <=> x = y
 
 rule Init:
 [Fr(~key)] --[OnlyOnce(), Setup(~key)]-> [!Skey($A, ~key), !Pk($A, pk(~key))]
@@ -12,11 +13,11 @@ rule Get_pk:
 [!Pk(S, publickey)] -->[Out(publickey)]
 
 rule Attacker_make_ciphertxt:
- [ Fr(m_), Fr(~key)] --[Attacker($A)]-> [ Out(aenc(<$A, m_>, pk(~key))), St_Attacker(aenc(<$A, m_>, pk(~key)))]
+[ Fr(m_), Fr(~key)] --[Attacker($A)]-> [ Out(aenc(<$A, m_>, pk(~key))), St_Attacker(aenc(<$A, m_>, pk(~key)))]
 
 rule Dec_Oracle:
-[Fr(~key), In(aenc(<$A, m_>,pk(~key))),St_Attacker(aenc(<$A, m_>,pk(~key)))] 
---[Send($A, aenc(<$A, m_>, pk(~key))), Secret(m_), Oracle($A), Sender($B), Role('Oracle'), Oracle_receive_ciphertext(aenc(<$A, m_>, pk(~key)))]-> 
+[Fr(~key), In(aenc(<$A, m_>,pk(~key))),St_Attacker(aenc(<$A, m_>,pk(~key))),In(ma),In(mb)] 
+--[Value(ma,mb), Send($A, aenc(<$A, m_>, pk(~key))), Secret(m_), Oracle($A), Sender($B), Role('Oracle'), Oracle_receive_ciphertext(aenc(<$A, m_>, pk(~key)))]-> 
 [Out(adec(aenc(<$A, m_>, pk(~key)), ~key)), St_ReceiveKeyOracle_ciphertext(aenc(<$A, m_>, pk(~key)))]
 
 rule Sender_encrypt:
@@ -24,10 +25,11 @@ rule Sender_encrypt:
 
 rule Attacker:
 let
+//m1 = ~m
 m1 = adec(aenc(<$A, m_>, pk(~key)), ~key)
 m2 = adec(aenc(<$B, ~m>, pk(~key)), ~key)
 in
- [St_ReceiveKeyOracle_ciphertext(aenc(<$A, m_>, pk(~key))), In(adec(aenc(<$A, m_>, pk(~key)), ~key)), St_ReceiveKey(aenc(<$B, ~m>, pk(~key))),  In(aenc(<$B, ~m>, pk(~key))), Fr(~key)] --[ Notequalvalue(<m1, m2>), Secretmessage(m2)]-> [  ]
+ [St_ReceiveKeyOracle_ciphertext(aenc(<$A, m_>, pk(~key))), In(adec(aenc(<$A, m_>, pk(~key)), ~key)), St_ReceiveKey(aenc(<$B, ~m>, pk(~key))),  In(aenc(<$B, ~m>, pk(~key))), Fr(~key)] --[Equal(m1, m2), Secretmessage(m2)]-> [  ]
 
 rule dec_message:
 let 
@@ -36,6 +38,7 @@ in
 //[In(c), In(~key)] --[Secretreceiver(message)]-> []
 [In(c), Fr(~key)] --[Secretreceiver(message)]-> []
 
+
 restriction OnlyOnce:
 "All #i #j. OnlyOnce() @ i & OnlyOnce() @ j==> #i = #j"
 
@@ -43,8 +46,8 @@ restriction choice_ciphertext:
  "All x #i. Oracle_receive_ciphertext(x)@i
   ==> (Ex y #j. Oracle_receive_ciphertext(y)@j & #j < #i) | (Ex y #j. Sender_send_ciphertext(y)@j & #j < #i)"
 
-lemma value_notequal:
- "All #i #j x. Notequalvalue(x)@i & Notequalvalue(x)@j ==> #i=#j"
+lemma value_equal:
+ "All x y #i. Value(x,y)@i ==> Equal(x,y)"
 
 lemma secret_sender_message:
   all-traces
